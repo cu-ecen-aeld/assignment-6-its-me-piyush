@@ -1,58 +1,56 @@
-# See https://git.yoctoproject.org/poky/tree/meta/files/common-licenses
+# aesd-assignments_git.bb
+# Builds aesdsocket from your assignment repo and installs it + autostarts via SysV init (BusyBox)
+
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
 
-# TODO: Set this  with the path to your assignments rep.  Use ssh protocol and see lecture notes
-# about how to setup ssh-agent for passwordless access
-SRC_URI = "git@github.com:cu-ecen-aeld/assignments-3-and-later-its-me-piyush.git;protocol=ssh;branch=main"
-
+SUMMARY = "AESD assignments - aesdsocket"
 PV = "1.0+git${SRCPV}"
-# TODO: set to reference a specific commit hash in your assignment repo
+
+# Fetch your assignments repo (SSH). If CI/host SSH is annoying, switch protocol=ssh -> protocol=https
+SRC_URI = "git://git@github.com/cu-ecen-aeld/assignments-3-and-later-its-me-piyush.git;protocol=ssh;branch=main \
+           file://aesdsocket-start-stop.sh \
+           file://aesdsocket.init \
+          "
+
+# Pin to a specific commit in your assignments repo
 SRCREV = "8282ae3d95e069c22095bac6ed6600d2dc39dad7"
 
-# This sets your staging directory based on WORKDIR, where WORKDIR is defined at 
-# https://docs.yoctoproject.org/ref-manual/variables.html?highlight=workdir#term-WORKDIR
-# We reference the "server" directory here to build from the "server" directory
-# in your assignments repo
+# Build from the server directory inside the repo
 S = "${WORKDIR}/git/server"
 
-# TODO: Add the aesdsocket application and any other files you need to install
-# See https://git.yoctoproject.org/poky/plain/meta/conf/bitbake.conf?h=kirkstone
+# SysV init auto-start (works with BusyBox init; no systemctl needed)
+inherit update-rc.d
+INITSCRIPT_NAME = "aesdsocket"
+INITSCRIPT_PARAMS = "defaults"
+
+# Package contents
 FILES:${PN} += " \
     ${bindir}/aesdsocket \
     ${bindir}/aesdsocket-start-stop.sh \
-    ${systemd_system_unitdir}/aesdsocket.service \
+    ${sysconfdir}/init.d/aesdsocket \
 "
-# TODO: customize these as necessary for any libraries you need for your application
-# (and remove comment)
-TARGET_LDFLAGS += "-pthread -lrt"
 
-do_configure () {
-	:
+# Link flags (append so we don't clobber Yocto defaults)
+TARGET_LDFLAGS:append = " -pthread -lrt"
+
+do_configure() {
+    :
 }
 
-do_compile () {
-	oe_runmake
+do_compile() {
+    oe_runmake
 }
 
-do_install () {
-	# TODO: Install your binaries/scripts here.
-	# Be sure to install the target directory with install -d first
-	# Yocto variables ${D} and ${S} are useful here, which you can read about at 
-	# https://docs.yoctoproject.org/ref-manual/variables.html?highlight=workdir#term-D
-	# and
-	# https://docs.yoctoproject.org/ref-manual/variables.html?highlight=workdir#term-S
-	# See example at https://github.com/cu-ecen-aeld/ecen5013-yocto/blob/ecen5013-hello-world/meta-ecen5013/recipes-ecen5013/ecen5013-hello-world/ecen5013-hello-world_git.bb
-
-	# Install aesdsocket binary
+do_install() {
+    # Install aesdsocket binary
     install -d ${D}${bindir}
     install -m 0755 ${S}/aesdsocket ${D}${bindir}/aesdsocket
 
-    # Optional start/stop helper script (nice for grading / debugging)
+    # Install optional start/stop helper script
     install -m 0755 ${WORKDIR}/aesdsocket-start-stop.sh ${D}${bindir}/aesdsocket-start-stop.sh
 
-    # systemd unit
-    install -d ${D}${systemd_system_unitdir}
-    install -m 0644 ${WORKDIR}/aesdsocket.service ${D}${systemd_system_unitdir}/aesdsocket.service
-
+    # Install SysV init script (the boot hook)
+    install -d ${D}${sysconfdir}/init.d
+    install -m 0755 ${WORKDIR}/aesdsocket.init ${D}${sysconfdir}/init.d/aesdsocket
 }
