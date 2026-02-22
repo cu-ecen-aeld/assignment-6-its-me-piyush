@@ -1,5 +1,5 @@
 # aesd-assignments_git.bb
-# Builds aesdsocket from your assignment repo and installs it + autostarts via SysV init (BusyBox)
+# Builds aesdsocket and autostarts it on BusyBox/SysV without update-rc.d (no postinstall failures)
 
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
@@ -7,31 +7,20 @@ LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda
 SUMMARY = "AESD assignments - aesdsocket"
 PV = "1.0+git${SRCPV}"
 
-# Fetch your assignments repo (SSH). If CI/host SSH is annoying, switch protocol=ssh -> protocol=https
 SRC_URI = "git://git@github.com/cu-ecen-aeld/assignments-3-and-later-its-me-piyush.git;protocol=ssh;branch=main \
-           file://aesdsocket-start-stop.sh \
-           file://aesdsocket.init \
+           file://aesdsocket-start-stop \
           "
 
-# Pin to a specific commit in your assignments repo
 SRCREV = "8282ae3d95e069c22095bac6ed6600d2dc39dad7"
 
-# Build from the server directory inside the repo
 S = "${WORKDIR}/git/server"
 
-# SysV init auto-start (works with BusyBox init; no systemctl needed)
-inherit update-rc.d
-INITSCRIPT_NAME = "aesdsocket"
-INITSCRIPT_PARAMS = "defaults"
-
-# Package contents
 FILES:${PN} += " \
     ${bindir}/aesdsocket \
-    ${bindir}/aesdsocket-start-stop.sh \
     ${sysconfdir}/init.d/aesdsocket \
+    ${sysconfdir}/rcS.d/S99aesdsocket \
 "
 
-# Link flags (append so we don't clobber Yocto defaults)
 TARGET_LDFLAGS:append = " -pthread -lrt"
 
 do_configure() {
@@ -47,10 +36,11 @@ do_install() {
     install -d ${D}${bindir}
     install -m 0755 ${S}/aesdsocket ${D}${bindir}/aesdsocket
 
-    # Install optional start/stop helper script
-    install -m 0755 ${WORKDIR}/aesdsocket-start-stop.sh ${D}${bindir}/aesdsocket-start-stop.sh
-
-    # Install SysV init script (the boot hook)
+    # Install the ONE script as the init script
     install -d ${D}${sysconfdir}/init.d
-    install -m 0755 ${WORKDIR}/aesdsocket.init ${D}${sysconfdir}/init.d/aesdsocket
+    install -m 0755 ${WORKDIR}/aesdsocket-start-stop ${D}${sysconfdir}/init.d/aesdsocket
+
+    # Ensure it runs at boot: link into rcS.d
+    install -d ${D}${sysconfdir}/rcS.d
+    ln -sf ../init.d/aesdsocket ${D}${sysconfdir}/rcS.d/S99aesdsocket
 }
